@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  bts-ccxt:
+    build: .
+    environment:
+      - XBTS_API=https://cmc.xbts.io/v2
+      - BTS_NODE=wss://node.xbts.io/ws
+      - BTS_ACCOUNT=${BTS_ACCOUNT}
+      - BTS_WIF=${BTS_WIF}
+      - PORT=8787
+    ports:
+      - "8787:8787"
