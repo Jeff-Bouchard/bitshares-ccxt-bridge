@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NESS Market Data - iusr.ness</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { 
+            color: #2c3e50; 
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .market-pair {
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+        }
+        .pair-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e1e4e8;
+        }
+        .pair-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .pair-status {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-inactive {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .market-data {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .data-box {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .data-title {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+        .data-value {
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+        .positive {
+            color: #28a745;
+        }
+        .negative {
+            color: #dc3545;
+        }
+        .loading {
+            color: #6c757d;
+            font-style: italic;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+            text-decoration: none;
+        }
+        .market-url {
+            font-size: 0.8em;
+            color: #6c757d;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+        .last-updated {
+            font-size: 0.8em;
+            color: #6c757d;
+            text-align: right;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>NESS Market Data</h1>
+    
+    <div id="pairs-container">
+        <!-- Pairs will be loaded here -->
+    </div>
+    
+    <div class="last-updated" id="last-updated">Last updated: -</div>
+    
+    <script>
+        const PAIRS = [
+            'NESS_BTS',
+            'NCH_BTS',
+            'NESS_NCH',
+            'NESS_SCH',
+            'NESS_DOGE',
+            'NESS_USDC',
+            'NESSNCHLP_BTS'  // AmmoB pool
+        ];
+        
+        // Special handling for AmmoB pool
+        const POOL_NAMES = {
+            'NESSNCHLP_BTS': 'AmmoB (NESS/NCH LP)'
+        };
+        
+        const POOL_URLS = {
+            'NESSNCHLP_BTS': 'https://app.xbts.io/#/pool/XBTSX.NESSNCHLP'
+        };
+        
+        // Use iusr.ness proxy
+        const XBTS_API = 'https://iusr.ness/api/proxy';
+        
+        function formatNumber(num, decimals = 8) {
+            if (num === undefined || num === null) return 'N/A';
+            const numValue = parseFloat(num);
+            if (isNaN(numValue)) return 'N/A';
+            return numValue.toFixed(decimals).replace(/\.?0+$/, '');
+        }
+        
+        function getChangeClass(change) {
+            if (change > 0) return 'positive';
+            if (change < 0) return 'negative';
+            return '';
+        }
+        
+        function updateLastUpdated() {
+            const now = new Date();
+            document.getElementById('last-updated').textContent = 
+                `Last updated: ${now.toLocaleTimeString()}`;
+        }
+        
+        async function fetchPairData(pair) {
+            const container = document.getElementById(`pair-${pair}`);
+            if (!container) return;
+            
+            const statusEl = container.querySelector('.pair-status');
+            const contentEl = container.querySelector('.pair-content');
+            
+            try {
+                // Show loading state
+                statusEl.className = 'pair-status';
+                statusEl.textContent = 'Loading...';
+                contentEl.innerHTML = '<div class="loading">Fetching data...</div>';
+                
+                // Fetch ticker data through iusr.ness proxy
+                const response = await fetch(`${XBTS_API}?pair=${pair}`, {
+                    headers: { 
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Update UI with market data
+                statusEl.className = 'pair-status status-active';
+                statusEl.textContent = 'Active';
+                
+                const change = parseFloat(data.change) || 0;
+                const changeClass = getChangeClass(change);
+                
+                contentEl.innerHTML = `
+                    <div class="market-data">
+                        <div class="data-box">
+                            <div class="data-title">Last Price</div>
+                            <div class="data-value">${formatNumber(data.last)} ${data.quote_symbol || ''}</div>
+                        </div>
+                        <div class="data-box">
+                            <div class="data-title">24h Change</div>
+                            <div class="data-value ${changeClass}">
+                                ${change > 0 ? '+' : ''}${formatNumber(change, 2)}%
+                            </div>
+                        </div>
+                        <div class="data-box">
+                            <div class="data-title">24h Volume</div>
+                            <div class="data-value">${formatNumber(data.base_volume)} ${data.base_symbol || ''}</div>
+                        </div>
+                        <div class="data-box">
+                            <div class="data-title">24h High/Low</div>
+                            <div class="data-value">
+                                ${formatNumber(data.high)} / ${formatNumber(data.low)}
+                            </div>
+                        </div>
+                    </div>
+                    ${POOL_URLS[pair] ? `
+                    <div class="market-url">
+                        <a href="${POOL_URLS[pair]}" target="_blank">View on XBTS Exchange</a>
+                    </div>` : ''}
+                    <button onclick="refreshPair('${pair}')" class="btn" style="margin-top: 10px;">
+                        Refresh
+                    </button>
+                `;
+                
+            } catch (error) {
+                console.error(`Error fetching ${pair}:`, error);
+                if (!statusEl) return;
+                
+                statusEl.className = 'pair-status status-inactive';
+                statusEl.textContent = 'Error';
+                
+                contentEl.innerHTML = `
+                    <div style="color: #dc3545; margin-bottom: 10px;">
+                        Error: ${error.message || 'Could not fetch market data'}
+                    </div>
+                    ${POOL_URLS[pair] ? `
+                    <div class="market-url">
+                        <a href="${POOL_URLS[pair]}" target="_blank">Check on XBTS Exchange</a>
+                    </div>` : ''}
+                    <button onclick="refreshPair('${pair}')" class="btn" style="margin-top: 10px;">
+                        Retry
+                    </button>
+                `;
+            }
+        }
+        
+        function refreshPair(pair) {
+            fetchPairData(pair);
+            updateLastUpdated();
+        }
+        
+        function refreshAllPairs() {
+            PAIRS.forEach(pair => fetchPairData(pair));
+            updateLastUpdated();
+        }
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('pairs-container');
+            
+            // Create a card for each pair
+            PAIRS.forEach(pair => {
+                const pairEl = document.createElement('div');
+                pairEl.className = 'market-pair';
+                pairEl.id = `pair-${pair}`;
+                pairEl.innerHTML = `
+                    <div class="pair-header">
+                        <div class="pair-name">${POOL_NAMES[pair] || pair.replace('_', '/')}</div>
+                        <span class="pair-status">-</span>
+                    </div>
+                    <div class="pair-content"></div>
+                `;
+                container.appendChild(pairEl);
+                
+                // Fetch data for this pair
+                fetchPairData(pair);
+            });
+            
+            // Set up auto-refresh every 30 seconds
+            setInterval(refreshAllPairs, 30000);
+            
+            // Initial timestamp
+            updateLastUpdated();
+        });
+        
+        // Make refreshPair available globally
+        window.refreshPair = refreshPair;
+    </script>
+</body>
+</html>
