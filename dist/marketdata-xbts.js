@@ -12,6 +12,7 @@ export async function getOrderBook(pair, depth = 50) {
 export async function getTrades(pair, limit = 100) {
     return (await axios.get(`${BASE}/trades/${pair}`, { params: { limit } })).data;
 }
-export async function getMarketHistory(pair) {
-    return (await axios.get(`${BASE}/history/market/${pair}`)).data;
+// Accept optional timeframe parameter; currently ignored by backend but forwarded for future support
+export async function getMarketHistory(pair, timeframe) {
+    return (await axios.get(`${BASE}/history/market/${pair}`, { params: timeframe ? { timeframe } : undefined })).data;
 }

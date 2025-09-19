@@ -22,7 +22,7 @@ log "Writing package.json..."
 cat > package.json <<'EOF'
 {
   "name": "bitshares-ccxt-bridge",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "ts-node-dev src/rest/server.ts",

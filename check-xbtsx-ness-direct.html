@@ -147,8 +147,7 @@
             'NESS_NCH',
             'NESS_SCH',
             'NESS_DOGE',
-            'NESS_USDC',
-            'NESSNCHLP_BTS'  // AmmoB pool
+            'NESS_USDC'
         ];
         
         // Special handling for AmmoB pool
@@ -160,14 +159,134 @@
             'NESSNCHLP_BTS': 'https://app.xbts.io/#/pool/XBTSX.NESSNCHLP'
         };
         
-        // API endpoints
-        const XBTS_API = 'https://market-api-v2.xbts.io';
+        // XBTS Public API endpoints
+        const XBTS_API = 'https://cmc.xbts.io/v2';
         const XBTS_WS = 'wss://public.xbts.io/ws';
         
         // Track last update times and data
         const lastUpdateTimes = {};
         const lastData = {};
         let socket = null;
+        
+        // Helper function to fetch market data
+        async function fetchMarketData() {
+            try {
+                const response = await fetch(`${XBTS_API}/summary`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching market data:', error);
+                throw error;
+            }
+        }
+
+        // Normalize a market key by stripping prefixes and unifying format like NESS_BTS
+        function normalizePairKey(key) {
+            if (!key) return '';
+            // Common formats: 'XBTSX.NESS_BTS', 'NESS_XBTSX.BTS', 'XBTSX.NESS_XBTSX.BTS', 'NESS_BTS'
+            // Replace separators to unify, remove XBTSX. prefix on either side
+            let k = String(key).replace(/[\/:\-]/g, '_');
+            // Split on underscore to get base and quote
+            const parts = k.split('_');
+            if (parts.length < 2) return k.replace('XBTSX.', '');
+            const base = parts[0].replace('XBTSX.', '');
+            const quote = parts[1].replace('XBTSX.', '');
+            return `${base}_${quote}`.toUpperCase();
+        }
+
+        // Generate many key variants that might appear in different APIs
+        function generatePairVariants(pair) {
+            const [b, q] = pair.split('_');
+            const base = b.toUpperCase();
+            const quote = q.toUpperCase();
+            const withPrefix = (s) => (s === 'BTS' ? s : `XBTSX.${s}`);
+            const combos = [
+                `${base}_${quote}`,
+                `${quote}_${base}`,
+                `${base}/${quote}`,
+                `${quote}/${base}`,
+                `${withPrefix(base)}_${withPrefix(quote)}`,
+                `${withPrefix(quote)}_${withPrefix(base)}`,
+                `${withPrefix(base)}/${withPrefix(quote)}`,
+                `${withPrefix(quote)}/${withPrefix(base)}`,
+            ];
+            // Include lowercase just in case
+            const lower = combos.map(v => v.toLowerCase());
+            return Array.from(new Set([...combos, ...lower]));
+        }
+
+        // Attempt to extract a ticker by pair from an XBTS summary payload
+        function getTickerFromSummary(summary, targetPair) {
+            if (!summary) return null;
+            const tickers = summary.tickers || summary.data || summary; // be lenient
+            const wanted = normalizePairKey(targetPair);
+            const wantedRev = wanted.includes('_') ? wanted.split('_').reverse().join('_') : wanted;
+            const rawVariants = generatePairVariants(targetPair);
+            const [wantBase, wantQuote] = wanted.split('_');
+
+            // If tickers is an object map
+            if (tickers && typeof tickers === 'object' && !Array.isArray(tickers)) {
+                // Direct match
+                if (tickers[wanted]) return normalizeTickerFields(tickers[wanted], wanted);
+                for (const key of Object.keys(tickers)) {
+                    const norm = normalizePairKey(key).toUpperCase();
+                    if (norm === wanted || norm === wantedRev) {
+                        return normalizeTickerFields(tickers[key], wanted);
+                    }
+                    // Also try against raw variant strings
+                    if (rawVariants.includes(String(key)) || rawVariants.includes(String(key).toUpperCase())) {
+                        return normalizeTickerFields(tickers[key], wanted);
+                    }
+                    // Fuzzy: check tokens containment (both base and quote regardless of order)
+                    const tokenized = normalizePairKey(key).toUpperCase();
+                    if (tokenized.includes(wantBase) && tokenized.includes(wantQuote)) {
+                        return normalizeTickerFields(tickers[key], wanted);
+                    }
+                }
+                // Extra diagnostics for this pair
+                console.warn(`Ticker not found for ${wanted}. Example keys include:`, Object.keys(tickers).slice(0, 5));
+            }
+
+            // If tickers is an array, search for a pair field
+            if (Array.isArray(tickers)) {
+                for (const item of tickers) {
+                    const key = item.pair || item.symbol || item.market || '';
+                    const norm = normalizePairKey(key).toUpperCase();
+                    if (norm === wanted || norm === wantedRev) {
+                        return normalizeTickerFields(item, wanted);
+                    }
+                    if (rawVariants.includes(String(key)) || rawVariants.includes(String(key).toUpperCase())) {
+                        return normalizeTickerFields(item, wanted);
+                    }
+                    const tokenized = normalizePairKey(key).toUpperCase();
+                    if (tokenized.includes(wantBase) && tokenized.includes(wantQuote)) {
+                        return normalizeTickerFields(item, wanted);
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Normalize varying field names into the UI's expected fields
+        function normalizeTickerFields(raw, normalizedPair) {
+            const [base, quote] = normalizedPair.split('_');
+            // Pick the best available fields
+            const last = raw.last ?? raw.close ?? raw.price ?? raw.latest ?? raw.last_price;
+            const change = raw.change ?? raw.percent_change ?? raw.percentChange ?? raw.change_24h ?? raw.price_change_percent;
+            const base_volume = raw.base_volume ?? raw.baseVolume ?? raw.volume ?? raw.volume_24h ?? raw.quoteVolume;
+            const high = raw.high ?? raw.high24h ?? raw.high_24h;
+            const low = raw.low ?? raw.low24h ?? raw.low_24h;
+
+            return {
+                last,
+                change: typeof change === 'string' ? parseFloat(change) : change,
+                base_volume,
+                high,
+                low,
+                base_symbol: base,
+                quote_symbol: quote,
+            };
+        }
         
         // Format pair for API
         function formatPairForApi(pair) {
@@ -204,86 +323,38 @@
                 statusEl.className = 'pair-status';
                 statusEl.textContent = 'Loading...';
                 contentEl.innerHTML = '<div class="loading">Fetching data...</div>';
-                
-                // Fetch real market data using JSONP
-                const pairFormatted = formatPairForApi(pair);
-                const url = `${XBTS_API}/tickers/${pairFormatted}`;
-                
-                const data = await new Promise((resolve, reject) => {
-                    const callbackName = `jsonp_${Date.now()}`;
-                    const timeoutId = setTimeout(() => {
-                        delete window[callbackName];
-                        reject(new Error('Request timeout'));
-                    }, 10000); // 10 second timeout
-                    
-                    window[callbackName] = (response) => {
-                        clearTimeout(timeoutId);
-                        delete window[callbackName];
-                        
-                        // Clean up script tag
-                        const script = document.getElementById(`jsonp-${callbackName}`);
-                        if (script) document.body.removeChild(script);
-                        
-                        if (response && response.data) {
-                            lastData[pair] = response.data;
-                            lastUpdateTimes[pair] = new Date();
-                            resolve(response.data);
-                        } else {
-                            reject(new Error('Invalid response format'));
-                        }
-                    };
-                    
-                    // Create script tag for JSONP
-                    const script = document.createElement('script');
-                    script.id = `jsonp-${callbackName}`;
-                    script.src = `${url}?callback=${callbackName}`;
-                    script.onerror = () => {
-                        clearTimeout(timeoutId);
-                        delete window[callbackName];
-                        if (script.parentNode) {
-                            document.body.removeChild(script);
-                        }
-                        reject(new Error('Failed to load data'));
-                    };
-                    
-                    document.body.appendChild(script);
-                });
-                
+
+                const summary = await fetchMarketData();
+                const ticker = getTickerFromSummary(summary, pair);
+                if (!ticker) {
+                    throw new Error(`No data available for ${pair}`);
+                }
+
+                lastData[pair] = ticker;
+                lastUpdateTimes[pair] = new Date();
+
                 // Update UI with market data
                 statusEl.className = 'pair-status status-active';
                 statusEl.textContent = 'Active';
-                
-                const change = parseFloat(data.change) || 0;
+
+                const change = parseFloat(ticker.change) || 0;
                 const changeClass = getChangeClass(change);
-                
+
                 contentEl.innerHTML = `
                     <div class="market-data">
-                        <div class="data-box">
-                            <div class="data-title">Last Price</div>
-                            <div class="data-value">${formatNumber(data.last)} ${data.quote_symbol || ''}</div>
+                        <div class="price">
+                            <span class="price-value">${formatNumber(ticker.last)}</span>
+                            <span class="change ${changeClass}">${change > 0 ? '+' : ''}${formatNumber(change, 2)}%</span>
                         </div>
-                        <div class="data-box">
-                            <div class="data-title">24h Change</div>
-                            <div class="data-value ${changeClass}">
-                                ${change > 0 ? '+' : ''}${formatNumber(change, 2)}%
-                            </div>
-                        </div>
-                        <div class="data-box">
-                            <div class="data-title">24h Volume</div>
-                            <div class="data-value">${formatNumber(data.base_volume)} ${data.base_symbol || ''}</div>
-                        </div>
-                        <div class="data-box">
-                            <div class="data-title">24h High/Low</div>
-                            <div class="data-value">
-                                ${formatNumber(data.high)} / ${formatNumber(data.low)}
-                            </div>
-                        </div>
+                        <div class="volume">24h Vol: ${formatNumber(ticker.base_volume, 2)} ${pair.split('_')[0]}</div>
+                        <div class="high-low">H: ${formatNumber(ticker.high)} | L: ${formatNumber(ticker.low)}</div>
                     </div>
                     <div class="market-url">
                         <a href="${POOL_URLS[pair] || `https://ex.xbts.io/market/${pair.split('_').map(a => a === 'BTS' ? a : `XBTSX.${a}`).join('_')}`}" target="_blank">
                             ${POOL_URLS[pair] ? 'View Pool on XBTS' : 'View on XBTS Exchange'}
                         </a>
                     </div>
+                    <div><a href="https://ex.xbts.io/market/${pair.replace('_', '/')}" target="_blank">Check on XBTS Exchange</a></div>
                     <button onclick="refreshPair('${pair}')" class="btn btn-outline" style="margin-top: 10px;">
                         Refresh
                     </button>
@@ -311,8 +382,8 @@
         }
         
         function refreshPair(pair) {
-            fetchPairData(pair);
-            updateLastUpdated();
+            // WebSocket-only: just reset status and wait for next live tick
+            setWaitingStatus(pair);
         }
         
         function refreshAllPairs() {
@@ -338,15 +409,14 @@
                 `;
                 container.appendChild(pairEl);
                 
-                // Fetch data for this pair
-                fetchPairData(pair);
+                // WebSocket-only: show waiting status until live data arrives
+                setWaitingStatus(pair);
             });
             
-            // Set up refresh button
-            document.getElementById('refresh-all').addEventListener('click', refreshAllPairs);
-            
-            // Set up auto-refresh every 30 seconds
-            setInterval(refreshAllPairs, 30000);
+            // Set up refresh button: just reset waiting state (no REST calls)
+            document.getElementById('refresh-all').addEventListener('click', () => {
+                PAIRS.forEach(setWaitingStatus);
+            });
             
             // Initial timestamp
             updateLastUpdated();
@@ -377,28 +447,48 @@
         
         // Function to update market data from WebSocket
         function updateMarketData(marketData) {
-            if (!marketData || !marketData.length) return;
-            
-            marketData.forEach(ticker => {
-                if (!ticker.symbol) return;
-                
-                // Extract base and quote from symbol (e.g., 'XBTSX.NESS_BTS')
-                const [base, quote] = ticker.symbol.includes('_') ? 
-                    ticker.symbol.split('_') : 
-                    [ticker.symbol, ''];
-                
-                // Format pair for our UI (e.g., 'NESS_BTS')
-                const pair = `${base.replace('XBTSX.', '')}_${quote.replace('XBTSX.', '')}`;
-                
-                // Update the UI for this pair
-                updatePairUI(pair, ticker);
-                
-                // Update last update time
-                lastUpdateTimes[pair] = new Date();
-            });
-            
-            // Update the last updated timestamp
-            updateLastUpdated();
+            if (!marketData) return;
+            try {
+                const pairsSeen = new Set();
+
+                // Case 1: marketData is an array of ticker objects
+                if (Array.isArray(marketData)) {
+                    marketData.forEach(t => handleOneTicker(t, pairsSeen));
+                }
+
+                // Case 2: marketData is an object keyed by symbol/pair
+                if (typeof marketData === 'object' && !Array.isArray(marketData)) {
+                    Object.entries(marketData).forEach(([key, t]) => {
+                        if (t && !t.symbol) t.symbol = key;
+                        handleOneTicker(t, pairsSeen);
+                    });
+                }
+
+                if (pairsSeen.size) updateLastUpdated();
+            } catch (e) {
+                console.error('updateMarketData error:', e, marketData);
+            }
+        }
+
+        function symbolToUiPair(symbol) {
+            if (!symbol) return '';
+            // Normalize and support variants like 'XBTSX.NESS_XBTSX.BTS', 'NESS_BTS', 'NESS/BTS'
+            const norm = normalizePairKey(symbol);
+            if (norm.includes('_')) return norm;
+            // If only one token, nothing we can do
+            return norm;
+        }
+
+        function handleOneTicker(ticker, pairsSeen) {
+            if (!ticker) return;
+            const pair = symbolToUiPair(ticker.symbol || ticker.pair || ticker.market);
+            if (!pair || !pair.includes('_')) return;
+
+            // Ensure fields present using normalizer
+            const normalized = normalizeTickerFields(ticker, pair);
+            updatePairUI(pair, normalized);
+            lastUpdateTimes[pair] = new Date();
+            pairsSeen.add(pair);
         }
         
         // Helper function to update UI for a specific pair
@@ -520,56 +610,112 @@
         function initWebSocket() {
             if (socket) return;
             
-            socket = new WebSocket(XBTS_WS);
-            
-            socket.onopen = () => {
-                console.log('WebSocket connected');
-                // Subscribe to market data updates
-                socket.send(JSON.stringify({
-                    method: 'subscribe',
-                    params: ['market.xbtsio.tickers']
-                }));
-            };
-            
-            socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.method === 'market.xbtsio.tickers' && data.params) {
-                        updateMarketData(data.params);
+            try {
+                socket = new WebSocket(XBTS_WS);
+                
+                socket.onopen = () => {
+                    console.log('WebSocket connected');
+                    // Subscribe to market data updates (try multiple channels for compatibility)
+                    const subs = [
+                    { method: 'subscribe', params: ['market.xbtsio.tickers'] },
+                    { method: 'subscribe', params: ['market.tickers'] },
+                    { method: 'subscribe', params: ['tickers'] }
+                ];
+                    subs.forEach(msg => socket.send(JSON.stringify(msg)));
+                };
+                
+                let msgCount = 0;
+                socket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (msgCount < 5) {
+                            console.log('WS msg', ++msgCount, data);
+                        }
+                        // Heartbeats
+                        if (data.method === 'ping' || data.type === 'ping') {
+                            try { socket.send(JSON.stringify({ method: 'pong' })); } catch {}
+                            return;
+                        }
+                        // Common shapes
+                        if (Array.isArray(data)) return updateMarketData(data);
+                        if (data.params) return updateMarketData(data.params);
+                        if (data.data) return updateMarketData(data.data);
+                        if (data.tickers) return updateMarketData(data.tickers);
+                        if (data.result && data.result.tickers) return updateMarketData(data.result.tickers);
+                    } catch (e) {
+                        console.error('Error processing WebSocket message:', e);
                     }
-                } catch (e) {
-                    console.error('Error processing WebSocket message:', e);
-                }
-            };
-            
-            socket.onclose = () => {
-                console.log('WebSocket disconnected, reconnecting...');
-                setTimeout(initWebSocket, 5000);
-            };
-            
-            socket.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                socket.close();
-            };
+                };
+                
+                socket.onclose = () => {
+                    console.log('WebSocket disconnected, reconnecting...');
+                    setTimeout(initWebSocket, 5000);
+                };
+                
+                socket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    if (socket) socket.close();
+                };
+            } catch (error) {
+                console.error('Failed to initialize WebSocket:', error);
+                // Fall back to polling if WebSocket fails
+                startPolling();
+            }
         }
         
-        // Initialize the page when loaded
+        // Polling mechanism
+        function startPolling() {
+            console.log('Starting polling...');
+            const pairs = ['NESS_BTS', 'NCH_BTS', 'NESS_NCH', 'NESS_SCH', 'NESS_DOGE', 'NESS_USDC'];
+            
+            // Initial fetch
+            updateAllPairs();
+            
+            // Set up polling
+            setInterval(updateAllPairs, 30000);
+            
+            async function updateAllPairs() {
+                console.log('Updating market data...');
+                try {
+                    const marketData = await fetchMarketData();
+                    if (marketData && marketData.tickers) {
+                        pairs.forEach(pair => {
+                            const ticker = marketData.tickers[pair];
+                            if (ticker) {
+                                updatePairUI(pair, ticker);
+                                lastUpdateTimes[pair] = new Date();
+                            }
+                        });
+                        updateLastUpdated();
+                    }
+                } catch (error) {
+                    console.error('Error updating market data:', error);
+                }
+            }
+        }
+        
+        function setWaitingStatus(pair) {
+            const container = document.getElementById(`pair-${pair}`);
+            if (!container) return;
+            const statusEl = container.querySelector('.pair-status');
+            const contentEl = container.querySelector('.pair-content');
+            statusEl.className = 'pair-status';
+            statusEl.textContent = 'Waiting for live data...';
+            contentEl.innerHTML = '<div class="loading">Listening to WebSocket feed...</div>';
+        }
+
+        // Initialize the page when loaded (WebSocket-only)
         $(document).ready(function() {
             // Initialize WebSocket
             initWebSocket();
-            
-            // Initial data load for all pairs
+
+            // Set waiting status for all tracked pairs
             const pairs = ['NESS_BTS', 'NCH_BTS', 'NESS_NCH', 'NESS_SCH', 'NESS_DOGE', 'NESS_USDC', 'NESSNCHLP_BTS'];
-            pairs.forEach(pair => fetchPairData(pair));
-            
-            // Set up auto-refresh every 30 seconds
-            setInterval(() => {
-                pairs.forEach(pair => fetchPairData(pair));
-            }, 30000);
-            
-            // Add refresh button handler
+            pairs.forEach(setWaitingStatus);
+
+            // Refresh-all simply re-sets waiting state (no REST calls)
             $('#refresh-all').on('click', function() {
-                pairs.forEach(pair => fetchPairData(pair));
+                pairs.forEach(setWaitingStatus);
             });
         });
     </script>

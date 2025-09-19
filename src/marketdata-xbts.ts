@@ -18,6 +18,7 @@ export async function getTrades(pair: string, limit = 100) {
   return (await axios.get(`${BASE}/trades/${pair}`, { params: { limit } })).data;
 }
 
-export async function getMarketHistory(pair: string) {
-  return (await axios.get(`${BASE}/history/market/${pair}`)).data;
+// Accept optional timeframe parameter; currently ignored by backend but forwarded for future support
+export async function getMarketHistory(pair: string, timeframe?: string) {
+  return (await axios.get(`${BASE}/history/market/${pair}`, { params: timeframe ? { timeframe } : undefined })).data;
 }
