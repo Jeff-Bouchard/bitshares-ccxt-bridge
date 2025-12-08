@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import time
+import getpass
 
 # Ensure local shim can be imported
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -66,7 +67,17 @@ def main():
     try:
         d = ex.describe()
         assert d['id'] == 'bitshares-dex'
-        vprint('describe():', json.dumps(d, indent=2))
+
+        def _json_sanitise(obj):
+            if isinstance(obj, dict):
+                return {k: _json_sanitise(v) for k, v in obj.items() if not isinstance(v, type)}
+            if isinstance(obj, list):
+                return [_json_sanitise(v) for v in obj]
+            if isinstance(obj, type):
+                return getattr(obj, '__name__', str(obj))
+            return obj
+
+        vprint('describe():', json.dumps(_json_sanitise(d), indent=2))
         pass_msg('describe() id')
     except Exception as e:
         return fail_msg('describe()', e)
@@ -134,11 +145,30 @@ def main():
     # Try private first; if credentials not available, attempt public balance using an account name.
     try:
         bal = None
+
+        has_env_creds = bool(os.environ.get('BTS_ACCOUNT') and os.environ.get('BTS_WIF'))
+        has_ccxt_creds = bool(getattr(ex, 'apiKey', None) and getattr(ex, 'secret', None))
+        has_options_creds = bool(getattr(ex, 'options', None) and ex.options.get('account') and ex.options.get('keyOrPassword'))
+
+        if not (has_env_creds or has_ccxt_creds or has_options_creds):
+            if VERBOSE:
+                print('No BitShares credentials detected; you can enter them now to test private balance.')
+            acct_input = input('Enter BitShares account name (leave empty to skip private balance test): ').strip()
+            if acct_input:
+                key_input = getpass.getpass('Enter BitShares ACTIVE private key (will not be echoed): ').strip()
+                if key_input:
+                    ex.options.setdefault('account', acct_input)
+                    ex.options.setdefault('keyOrPassword', key_input)
+                    ex.options.setdefault('isPassword', False)
+
         try:
             bal = ex.fetch_balance()
         except Exception as e1:
-            # Accept first CLI arg as account as well
-            cli_acct = sys.argv[1] if len(sys.argv) > 1 else None
+            cli_acct = None
+            for arg in sys.argv[1:]:
+                if not arg.startswith('-'):
+                    cli_acct = arg
+                    break
             acct = os.environ.get('BTS_ACCOUNT') or os.environ.get('PUBLIC_BALANCE_ACCOUNT') or cli_acct
             if acct:
                 bal = ex.fetch_balance({'account': acct})

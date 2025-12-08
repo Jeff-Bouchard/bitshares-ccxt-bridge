@@ -15,16 +15,26 @@ export class BitSharesCCXT {
             symbol: symbolFromXbtsTicker(k),
             base: v.base_symbol,
             quote: v.quote_symbol,
+            baseId: v.base_id ?? v.base_symbol,
+            quoteId: v.quote_id ?? v.quote_symbol,
             active: v.isFrozen === 0,
             type: 'spot',
             spot: true,
+            margin: false,
+            swap: false,
+            future: false,
+            option: false,
+            contract: false,
+            taker: 0.001,
+            maker: 0.001,
             // Best-effort precision/limits since XBTS summary does not expose them directly
             precision: { price: 8, amount: 8 },
             limits: {
                 amount: { min: undefined, max: undefined },
                 price: { min: undefined, max: undefined },
                 cost: { min: undefined, max: undefined },
-            }
+            },
+            info: v
         }));
         return { id: this.id, name: this.name };
     }
