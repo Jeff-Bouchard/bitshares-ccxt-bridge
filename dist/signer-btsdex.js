@@ -1,10 +1,9 @@
 import BitShares from 'btsdex';
 import { parseSymbol } from './symbols.js';
 export class Signer {
-    constructor() {
-        this.connected = false;
-        this.acc = null;
-    }
+    accountName;
+    connected = false;
+    acc = null;
     async connect(node) {
         if (!this.connected) {
             await (node ? BitShares.connect(node) : BitShares.connect());

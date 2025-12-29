@@ -38,7 +38,6 @@ api_call() {
 }
 
 # Test function
-# Replace the test_endpoint function with:
 test_endpoint() {
     local name="$1"
     local method="$2"
@@ -53,6 +52,7 @@ test_endpoint() {
     
     if [ $status -ne 0 ]; then
         echo -e "${RED}FAILED${NC} (Connection error)"
+        ((TESTS_FAILED++))
         return
     fi
     
@@ -65,10 +65,37 @@ test_endpoint() {
     # Try to parse JSON
     if ! jq -e . >/dev/null 2>&1 <<<"$response"; then
         echo -e "${RED}FAILED${NC} (Invalid JSON)"
+        ((TESTS_FAILED++))
         return
     fi
     
-    # Rest of validation...
+    # Check for API error in response
+    if echo "$response" | jq -e '.error' >/dev/null 2>&1; then
+        local error_msg=$(echo "$response" | jq -r '.error // "Unknown error"')
+        echo -e "${RED}FAILED${NC} (API error: $error_msg)"
+        ((TESTS_FAILED++))
+        return
+    fi
+    
+    # Check expected keys if provided
+    if [ -n "$expected_keys" ]; then
+        local missing_keys=""
+        for key in $expected_keys; do
+            if ! echo "$response" | jq -e ".$key" >/dev/null 2>&1; then
+                missing_keys="$missing_keys $key"
+            fi
+        done
+        
+        if [ -n "$missing_keys" ]; then
+            echo -e "${RED}FAILED${NC} (Missing keys:$missing_keys)"
+            ((TESTS_FAILED++))
+            return
+        fi
+    fi
+    
+    # If we got here, the test passed
+    echo -e "${GREEN}PASSED${NC}"
+    ((TESTS_PASSED++))
 }
 
 # Check if server is running
