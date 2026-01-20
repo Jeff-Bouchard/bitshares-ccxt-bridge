@@ -56,33 +56,44 @@ test_endpoint() {
         return
     fi
     
-    # Check if response is valid JSON
-    if ! echo "$response" | jq . >/dev/null 2>&1; then
+    # Check Content-Type header
+    local content_type=$(curl -sI "$BASE_URL$endpoint" | grep -i 'content-type' | tr -d '\r')
+    if [[ ! "$content_type" =~ "application/json" ]]; then
+        echo -e "${YELLOW}WARNING${NC} (Invalid Content-Type: $content_type)"
+    fi
+    
+    # Try to parse JSON
+    if ! jq -e . >/dev/null 2>&1 <<<"$response"; then
         echo -e "${RED}FAILED${NC} (Invalid JSON)"
-        echo "Response: $response"
         ((TESTS_FAILED++))
         return
     fi
     
-    # Check for error in response
+    # Check for API error in response
     if echo "$response" | jq -e '.error' >/dev/null 2>&1; then
-        local error=$(echo "$response" | jq -r '.error')
-        echo -e "${RED}FAILED${NC} (API Error: $error)"
+        local error_msg=$(echo "$response" | jq -r '.error // "Unknown error"')
+        echo -e "${RED}FAILED${NC} (API error: $error_msg)"
         ((TESTS_FAILED++))
         return
     fi
     
     # Check expected keys if provided
     if [ -n "$expected_keys" ]; then
+        local missing_keys=""
         for key in $expected_keys; do
             if ! echo "$response" | jq -e ".$key" >/dev/null 2>&1; then
-                echo -e "${RED}FAILED${NC} (Missing key: $key)"
-                ((TESTS_FAILED++))
-                return
+                missing_keys="$missing_keys $key"
             fi
         done
+        
+        if [ -n "$missing_keys" ]; then
+            echo -e "${RED}FAILED${NC} (Missing keys:$missing_keys)"
+            ((TESTS_FAILED++))
+            return
+        fi
     fi
     
+    # If we got here, the test passed
     echo -e "${GREEN}PASSED${NC}"
     ((TESTS_PASSED++))
 }

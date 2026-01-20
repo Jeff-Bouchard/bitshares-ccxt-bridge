@@ -60,6 +60,25 @@ cp .env.example .env
 npm start
 ```
 
+## 🛠 Installation with OctoBot
+
+1. **Install the bridge** (from bridge directory):
+   ```bash
+   cd /path/to/bitshares-ccxt-bridge
+   pip install -e .
+   ```
+
+2. **Set up environment**:
+   ```bash
+   cp .env.template .env
+   # Edit .env with your BitShares credentials
+   ```
+
+3. **Run with OctoBot**:
+   ```bash
+   python /path/to/run_octobot_with_bitshares.py
+   ```
+
 ## 🎮 Management Scripts
 
 After installation, use these simple commands:
