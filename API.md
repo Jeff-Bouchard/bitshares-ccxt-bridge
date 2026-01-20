@@ -6,7 +6,7 @@ The BitShares CCXT Bridge provides a comprehensive REST API and programmatic int
 
 ## Base URL
 
-```
+```text
 http://localhost:8787
 ```
 
@@ -31,6 +31,7 @@ All API responses are in JSON format. Successful responses return the requested 
 Returns exchange information and initializes the market cache.
 
 **Response:**
+
 ```json
 {
   "id": "bitshares-dex",
@@ -43,6 +44,7 @@ Returns exchange information and initializes the market cache.
 Returns all available trading pairs with metadata.
 
 **Response:**
+
 ```json
 [
   {
@@ -71,14 +73,17 @@ Returns all available trading pairs with metadata.
 Returns price ticker for a specific trading pair.
 
 **Parameters:**
+
 - `symbol` (required): Trading pair symbol (e.g., "BTS/USDT")
 
 **Example:**
+
 ```http
 GET /ticker?symbol=BTS/USDT
 ```
 
 **Response:**
+
 ```json
 {
   "symbol": "BTS/USDT",
@@ -113,15 +118,18 @@ GET /ticker?symbol=BTS/USDT
 Returns order book (bids and asks) for a trading pair.
 
 **Parameters:**
+
 - `symbol` (required): Trading pair symbol
 - `limit` (optional): Number of orders to return (default: 50)
 
 **Example:**
+
 ```http
 GET /orderbook?symbol=BTS/USDT&limit=20
 ```
 
 **Response:**
+
 ```json
 {
   "symbol": "BTS/USDT",
@@ -147,16 +155,19 @@ GET /orderbook?symbol=BTS/USDT&limit=20
 Returns recent trade history for a trading pair.
 
 **Parameters:**
+
 - `symbol` (required): Trading pair symbol
 - `since` (optional): Timestamp to fetch trades from
 - `limit` (optional): Number of trades to return (default: 100)
 
 **Example:**
+
 ```http
 GET /trades?symbol=BTS/USDT&limit=50
 ```
 
 **Response:**
+
 ```json
 [
   {
@@ -183,15 +194,18 @@ GET /trades?symbol=BTS/USDT&limit=50
 Returns OHLCV (candlestick) data for a trading pair.
 
 **Parameters:**
+
 - `symbol` (required): Trading pair symbol
 - `timeframe` (optional): Time interval (currently ignored by backend)
 
 **Example:**
+
 ```http
 GET /ohlcv?symbol=BTS/USDT&timeframe=1h
 ```
 
 **Response:**
+
 ```json
 [
   [1758153085000, 720.0, 740.0, 715.0, 738.41, 1250.5],
@@ -206,6 +220,7 @@ Each array contains: `[timestamp, open, high, low, close, volume]`
 Returns all available currencies with metadata (CCXT compliance).
 
 **Response:**
+
 ```json
 {
   "BTS": {
@@ -240,6 +255,7 @@ Returns all available currencies with metadata (CCXT compliance).
 Returns trading fee structure (CCXT compliance).
 
 **Response:**
+
 ```json
 {
   "trading": {
@@ -260,14 +276,17 @@ Returns trading fee structure (CCXT compliance).
 Returns trading limits for all or specific symbols (CCXT compliance).
 
 **Parameters:**
+
 - `symbols` (optional): Comma-separated list of symbols to get limits for
 
 **Example:**
+
 ```http
 GET /tradingLimits?symbols=BTS/USDT,BTS/CNY
 ```
 
 **Response:**
+
 ```json
 {
   "BTS/USDT": {
@@ -290,6 +309,7 @@ GET /tradingLimits?symbols=BTS/USDT,BTS/CNY
 Authenticate with your BitShares account for trading operations.
 
 **Request Body:**
+
 ```json
 {
   "account": "your-account-name",
@@ -300,12 +320,14 @@ Authenticate with your BitShares account for trading operations.
 ```
 
 **Parameters:**
+
 - `account` (required): BitShares account name
 - `keyOrPassword` (required): Private key (WIF format) or password
 - `isPassword` (optional): Set to true if using password instead of private key
 - `node` (optional): BitShares node WebSocket URL
 
 **Response:**
+
 ```json
 {
   "ok": true
@@ -317,6 +339,7 @@ Authenticate with your BitShares account for trading operations.
 Returns account balances (requires login).
 
 **Response:**
+
 ```json
 {
   "BTS": {
@@ -337,14 +360,17 @@ Returns account balances (requires login).
 Returns public balance for any BitShares account (no login required).
 
 **Parameters:**
+
 - `account` (required): BitShares account name to query
 
 **Example:**
+
 ```http
 GET /balancePublic?account=some-account
 ```
 
 **Response:**
+
 ```json
 {
   "BTS": {
@@ -360,6 +386,7 @@ GET /balancePublic?account=some-account
 Create a new limit order (requires login).
 
 **Request Body:**
+
 ```json
 {
   "symbol": "BTS/USDT",
@@ -372,6 +399,7 @@ Create a new limit order (requires login).
 ```
 
 **Parameters:**
+
 - `symbol` (required): Trading pair symbol
 - `type` (required): Order type (currently only "limit" supported)
 - `side` (required): "buy" or "sell"
@@ -380,6 +408,7 @@ Create a new limit order (requires login).
 - `params` (optional): Additional order parameters
 
 **Response:**
+
 ```json
 {
   "id": "order-id-12345",
@@ -398,14 +427,17 @@ Create a new limit order (requires login).
 Cancel an existing order (requires login).
 
 **Parameters:**
+
 - `id` (required): Order ID to cancel
 
 **Example:**
+
 ```http
 DELETE /order?id=order-id-12345
 ```
 
 **Response:**
+
 ```json
 {
   "id": "order-id-12345",
@@ -418,16 +450,19 @@ DELETE /order?id=order-id-12345
 Returns all open orders for the authenticated account (requires login).
 
 **Parameters:**
+
 - `symbol` (optional): Filter by trading pair
 - `since` (optional): Filter orders after timestamp
 - `limit` (optional): Maximum number of orders to return
 
 **Example:**
+
 ```http
 GET /openOrders?symbol=BTS/USDT&limit=10
 ```
 
 **Response:**
+
 ```json
 [
   {
@@ -451,15 +486,18 @@ GET /openOrders?symbol=BTS/USDT&limit=10
 Returns details for a specific order by ID (CCXT compliance).
 
 **Parameters:**
+
 - `id` (required): Order ID in URL path
 - `symbol` (optional): Trading pair symbol
 
 **Example:**
+
 ```http
 GET /order/1.7.12345?symbol=BTS/USDT
 ```
 
 **Response:**
+
 ```json
 {
   "id": "1.7.12345",
@@ -481,16 +519,19 @@ GET /order/1.7.12345?symbol=BTS/USDT
 Returns order history for the authenticated account (CCXT compliance).
 
 **Parameters:**
+
 - `symbol` (optional): Filter by trading pair
 - `since` (optional): Filter orders after timestamp
 - `limit` (optional): Maximum number of orders to return
 
 **Example:**
+
 ```http
 GET /orders?symbol=BTS/USDT&limit=50
 ```
 
 **Response:**
+
 ```json
 [
   {
@@ -514,16 +555,19 @@ GET /orders?symbol=BTS/USDT&limit=50
 Returns trade history for the authenticated account (CCXT compliance).
 
 **Parameters:**
+
 - `symbol` (optional): Filter by trading pair
 - `since` (optional): Filter trades after timestamp
 - `limit` (optional): Maximum number of trades to return
 
 **Example:**
+
 ```http
 GET /myTrades?symbol=BTS/USDT&limit=100
 ```
 
 **Response:**
+
 ```json
 [
   {
@@ -545,9 +589,11 @@ GET /myTrades?symbol=BTS/USDT&limit=100
 Edit an existing order (CCXT compliance). Note: BitShares doesn't support direct order editing, so this cancels the original order and creates a new one.
 
 **Parameters:**
+
 - `id` (required): Order ID in URL path
 
 **Request Body:**
+
 ```json
 {
   "symbol": "BTS/USDT",
@@ -560,6 +606,7 @@ Edit an existing order (CCXT compliance). Note: BitShares doesn't support direct
 ```
 
 **Response:**
+
 ```json
 {
   "id": "new-order-id-54321",
@@ -576,7 +623,7 @@ Edit an existing order (CCXT compliance). Note: BitShares doesn't support direct
 ## Error Codes
 
 | HTTP Status | Error Type | Description |
-|-------------|------------|-------------|
+| --- | --- | --- |
 | 400 | Bad Request | Missing required parameters |
 | 401 | Unauthorized | Authentication required |
 | 404 | Not Found | Endpoint or resource not found |
@@ -606,10 +653,12 @@ const orderbook = await exchange.fetchOrderBook('BTS/USDT');
 The bridge supports all trading pairs available on the XBTS exchange. Popular pairs include:
 
 **Major Pairs:**
+
 - BTS/USDT, BTS/USD, BTS/CNY, BTS/RUB
 - BTC/USDT, ETH/USDT, LTC/USDT
 
 **Custom Tokens:**
+
 - BTS/NESS, BTS/SCH, BTS/NCH
 - BTC/NESS, BTC/SCH, BTC/NCH
 - ETH/NESS, ETH/SCH
@@ -685,6 +734,7 @@ curl "http://localhost:8787/openOrders"
 ## Support
 
 For API support and bug reports:
+
 - Check the main README.md for troubleshooting
 - Use `./test-api.sh` to diagnose issues
 - Review server logs with `./logs.sh`
