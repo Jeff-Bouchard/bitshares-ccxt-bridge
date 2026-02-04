@@ -65,10 +65,44 @@ test_endpoint() {
     # Try to parse JSON
     if ! jq -e . >/dev/null 2>&1 <<<"$response"; then
         echo -e "${RED}FAILED${NC} (Invalid JSON)"
+<<<<<<< HEAD
         return
     fi
     
     # Rest of validation...
+=======
+        ((TESTS_FAILED++))
+        return
+    fi
+    
+    # Check for API error in response
+    if echo "$response" | jq -e '.error' >/dev/null 2>&1; then
+        local error_msg=$(echo "$response" | jq -r '.error // "Unknown error"')
+        echo -e "${RED}FAILED${NC} (API error: $error_msg)"
+        ((TESTS_FAILED++))
+        return
+    fi
+    
+    # Check expected keys if provided
+    if [ -n "$expected_keys" ]; then
+        local missing_keys=""
+        for key in $expected_keys; do
+            if ! echo "$response" | jq -e ".$key" >/dev/null 2>&1; then
+                missing_keys="$missing_keys $key"
+            fi
+        done
+        
+        if [ -n "$missing_keys" ]; then
+            echo -e "${RED}FAILED${NC} (Missing keys:$missing_keys)"
+            ((TESTS_FAILED++))
+            return
+        fi
+    fi
+    
+    # If we got here, the test passed
+    echo -e "${GREEN}PASSED${NC}"
+    ((TESTS_PASSED++))
+>>>>>>> 34a1355e0a518c16dd7901035145a0858f6d8d70
 }
 
 # Check if server is running

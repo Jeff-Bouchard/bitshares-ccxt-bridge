@@ -2,12 +2,10 @@ import { getSummary, getTicker, getOrderBook, getTrades, getMarketHistory } from
 import { xbtsTickerFromSymbol, symbolFromXbtsTicker } from './symbols.js';
 import { Signer } from './signer-btsdex.js';
 export class BitSharesCCXT {
-    constructor() {
-        this.id = 'bitshares-dex';
-        this.name = 'BitShares DEX (CCXT bridge)';
-        this.signer = new Signer();
-        this.marketsCache = [];
-    }
+    id = 'bitshares-dex';
+    name = 'BitShares DEX (CCXT bridge)';
+    signer = new Signer();
+    marketsCache = [];
     async describe() {
         const summary = await getSummary();
         this.marketsCache = Object.entries(summary.tickers).map(([k, v]) => ({
